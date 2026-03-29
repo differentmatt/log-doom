@@ -22,14 +22,14 @@ export default function CategoryRow({ category, value, onChange }: CategoryRowPr
         </span>
         <button
           onClick={() => setShowDesc(!showDesc)}
-          className="h-6 w-6 flex items-center justify-center text-xs text-zinc-500 hover:text-zinc-300 shrink-0"
+          className="h-6 w-6 flex items-center justify-center text-xs text-zinc-200 shrink-0"
           aria-label={`Info about ${category.label}`}
         >
           ?
         </button>
       </div>
       {showDesc && (
-        <p className="text-xs text-zinc-500 mb-1.5 ml-5">{category.description}</p>
+        <p className="text-xs text-zinc-200 mb-1.5 ml-5">{category.description}</p>
       )}
       <div className="flex gap-1.5 ml-5">
         {hourOptions.map((h) => (
