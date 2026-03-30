@@ -8,43 +8,80 @@ REGION="us-east-1"
 echo "=== Log Doom Infrastructure Setup ==="
 echo ""
 
-# Step 1: Request ACM certificate
-echo "Requesting ACM certificate for ${DOMAIN} and www.${DOMAIN}..."
-CERT_ARN=$(aws acm request-certificate \
+# Step 1: Check for existing ACM certificate or request a new one
+echo "Checking for existing ACM certificate for ${DOMAIN}..."
+CERT_ARN=$(aws acm list-certificates \
   --region "${REGION}" \
-  --domain-name "${DOMAIN}" \
-  --subject-alternative-names "www.${DOMAIN}" \
-  --validation-method DNS \
-  --query 'CertificateArn' \
+  --certificate-statuses PENDING_VALIDATION ISSUED \
+  --query "CertificateSummaryList[?DomainName=='${DOMAIN}'].CertificateArn | [0]" \
   --output text)
 
-echo "Certificate ARN: ${CERT_ARN}"
+if [[ "${CERT_ARN}" != "None" && -n "${CERT_ARN}" ]]; then
+  echo "Found existing certificate: ${CERT_ARN}"
+else
+  echo "No existing certificate found. Requesting new certificate for ${DOMAIN} and www.${DOMAIN}..."
+  CERT_ARN=$(aws acm request-certificate \
+    --region "${REGION}" \
+    --domain-name "${DOMAIN}" \
+    --subject-alternative-names "www.${DOMAIN}" \
+    --validation-method DNS \
+    --query 'CertificateArn' \
+    --output text)
+  echo "Requested certificate: ${CERT_ARN}"
+fi
 echo ""
 
-# Step 2: Show DNS validation records
-echo "Waiting for validation details..."
-sleep 5
+# Step 2: Wait for validation resource records to be populated, then display them
+echo "Waiting for DNS validation details to become available..."
 
-VALIDATION=$(aws acm describe-certificate \
+MAX_ATTEMPTS=12
+ATTEMPT=0
+while true; do
+  RECORD_COUNT=$(aws acm describe-certificate \
+    --region "${REGION}" \
+    --certificate-arn "${CERT_ARN}" \
+    --query 'length(Certificate.DomainValidationOptions[?ResourceRecord].ResourceRecord)' \
+    --output text)
+
+  if [[ "${RECORD_COUNT}" -gt 0 ]] 2>/dev/null; then
+    break
+  fi
+
+  ATTEMPT=$((ATTEMPT + 1))
+  if [[ "${ATTEMPT}" -ge "${MAX_ATTEMPTS}" ]]; then
+    echo "ERROR: Validation records not available after ${MAX_ATTEMPTS} attempts. Check the certificate in the AWS console."
+    exit 1
+  fi
+
+  SLEEP_TIME=$(( ATTEMPT < 5 ? 2 : 5 ))
+  echo "  Waiting ${SLEEP_TIME}s for records... (attempt ${ATTEMPT}/${MAX_ATTEMPTS})"
+  sleep "${SLEEP_TIME}"
+done
+
+# Fetch validation records, deduplicated by CNAME name (column 2)
+VALIDATION_TEXT=$(aws acm describe-certificate \
   --region "${REGION}" \
   --certificate-arn "${CERT_ARN}" \
-  --query 'Certificate.DomainValidationOptions[0].ResourceRecord' \
-  --output json)
-
-CNAME_NAME=$(echo "${VALIDATION}" | python3 -c "import sys,json; print(json.load(sys.stdin)['Name'])")
-CNAME_VALUE=$(echo "${VALIDATION}" | python3 -c "import sys,json; print(json.load(sys.stdin)['Value'])")
+  --query 'Certificate.DomainValidationOptions[].[DomainName, ResourceRecord.Name, ResourceRecord.Value]' \
+  --output text)
 
 echo "============================================"
-echo "  Add this CNAME record in Cloudflare DNS:"
+echo "  Add these CNAME records in Cloudflare DNS:"
+echo "  (Set Cloudflare proxy to DNS-only / grey cloud)"
 echo ""
-echo "  Name:  ${CNAME_NAME}"
-echo "  Value: ${CNAME_VALUE}"
-echo ""
-echo "  (One record covers both ${DOMAIN} and www.${DOMAIN})"
-echo "  Set Cloudflare proxy to DNS-only (grey cloud)."
+
+RECORD_INDEX=0
+while IFS=$'\t' read -r domain cname_name cname_value; do
+  RECORD_INDEX=$((RECORD_INDEX + 1))
+  echo "  Record ${RECORD_INDEX} (for ${domain}):"
+  echo "    Name:  ${cname_name}"
+  echo "    Value: ${cname_value}"
+  echo ""
+done <<< "$(echo "${VALIDATION_TEXT}" | sort -t$'\t' -k2,2 -u)"
+
 echo "============================================"
 echo ""
-read -rp "Press Enter after adding the DNS record..."
+read -rp "Press Enter after adding the DNS record(s)..."
 
 # Step 3: Wait for certificate validation
 echo "Waiting for certificate validation (this may take a few minutes)..."
@@ -55,12 +92,19 @@ echo "Certificate validated!"
 echo ""
 
 # Step 4: Check if OIDC provider already exists
+ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
+if [[ -z "${ACCOUNT_ID}" ]]; then
+  echo "ERROR: Could not determine AWS account ID."
+  exit 1
+fi
+
+OIDC_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
 CREATE_OIDC="true"
-if aws iam get-open-id-connect-provider \
-  --open-id-connect-provider-arn "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):oidc-provider/token.actions.githubusercontent.com" \
-  &>/dev/null; then
+if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "${OIDC_ARN}" >/dev/null 2>&1; then
   echo "GitHub OIDC provider already exists, skipping creation."
   CREATE_OIDC="false"
+else
+  echo "GitHub OIDC provider will be created by the stack."
 fi
 
 # Step 5: Deploy CloudFormation stack
@@ -81,25 +125,48 @@ echo ""
 echo "Stack deployed! Fetching outputs..."
 echo ""
 
-# Step 6: Print outputs
-OUTPUTS=$(aws cloudformation describe-stacks \
+# Step 6: Fetch stack outputs using --query (no python dependency)
+BUCKET=$(aws cloudformation describe-stacks \
   --region "${REGION}" \
   --stack-name "${STACK_NAME}" \
-  --query 'Stacks[0].Outputs' \
-  --output json)
+  --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue | [0]" \
+  --output text)
 
-BUCKET=$(echo "${OUTPUTS}" | python3 -c "import sys,json; print(next(o['OutputValue'] for o in json.load(sys.stdin) if o['OutputKey']=='BucketName'))")
-DIST_ID=$(echo "${OUTPUTS}" | python3 -c "import sys,json; print(next(o['OutputValue'] for o in json.load(sys.stdin) if o['OutputKey']=='DistributionId'))")
-DIST_DOMAIN=$(echo "${OUTPUTS}" | python3 -c "import sys,json; print(next(o['OutputValue'] for o in json.load(sys.stdin) if o['OutputKey']=='DistributionDomain'))")
-ROLE_ARN=$(echo "${OUTPUTS}" | python3 -c "import sys,json; print(next(o['OutputValue'] for o in json.load(sys.stdin) if o['OutputKey']=='DeployRoleArn'))")
+DIST_ID=$(aws cloudformation describe-stacks \
+  --region "${REGION}" \
+  --stack-name "${STACK_NAME}" \
+  --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue | [0]" \
+  --output text)
+
+DIST_DOMAIN=$(aws cloudformation describe-stacks \
+  --region "${REGION}" \
+  --stack-name "${STACK_NAME}" \
+  --query "Stacks[0].Outputs[?OutputKey=='DistributionDomain'].OutputValue | [0]" \
+  --output text)
+
+ROLE_ARN=$(aws cloudformation describe-stacks \
+  --region "${REGION}" \
+  --stack-name "${STACK_NAME}" \
+  --query "Stacks[0].Outputs[?OutputKey=='DeployRoleArn'].OutputValue | [0]" \
+  --output text)
+
+# Step 7: Set GitHub repo variables if gh CLI is available
+if command -v gh &>/dev/null; then
+  echo "Setting GitHub repo variables via gh CLI..."
+  gh variable set AWS_ROLE_ARN --body "${ROLE_ARN}"
+  gh variable set S3_BUCKET --body "${BUCKET}"
+  gh variable set CLOUDFRONT_DISTRIBUTION_ID --body "${DIST_ID}"
+  echo "GitHub variables set."
+  echo ""
+fi
 
 echo "============================================"
 echo "  Stack outputs:"
 echo ""
-echo "  S3 Bucket:        ${BUCKET}"
-echo "  Distribution ID:  ${DIST_ID}"
+echo "  S3 Bucket:         ${BUCKET}"
+echo "  Distribution ID:   ${DIST_ID}"
 echo "  CloudFront Domain: ${DIST_DOMAIN}"
-echo "  Deploy Role ARN:  ${ROLE_ARN}"
+echo "  Deploy Role ARN:   ${ROLE_ARN}"
 echo ""
 echo "  Next steps:"
 echo ""
@@ -108,10 +175,14 @@ echo "     logdoom.com     → ${DIST_DOMAIN}"
 echo "     www.logdoom.com → ${DIST_DOMAIN}"
 echo "     (Set Cloudflare proxy to DNS-only / grey cloud)"
 echo ""
-echo "  2. Set GitHub repo variables (Settings → Secrets and variables → Actions → Variables):"
-echo "     AWS_ROLE_ARN              = ${ROLE_ARN}"
-echo "     S3_BUCKET                 = ${BUCKET}"
-echo "     CLOUDFRONT_DISTRIBUTION_ID = ${DIST_ID}"
+if command -v gh &>/dev/null; then
+  echo "  2. GitHub repo variables have been set automatically."
+else
+  echo "  2. Set GitHub repo variables (Settings → Secrets and variables → Actions → Variables):"
+  echo "     AWS_ROLE_ARN              = ${ROLE_ARN}"
+  echo "     S3_BUCKET                 = ${BUCKET}"
+  echo "     CLOUDFRONT_DISTRIBUTION_ID = ${DIST_ID}"
+fi
 echo ""
 echo "  3. Push to main to trigger the first deploy."
 echo "============================================"
