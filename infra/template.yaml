@@ -7,7 +7,7 @@ Parameters:
     Description: ACM certificate ARN (must be in us-east-1) for logdoom.com and www.logdoom.com
   GitHubOrg:
     Type: String
-    Default: mattlott
+    Default: differentmatt
     Description: GitHub username or organization
   GitHubRepo:
     Type: String
