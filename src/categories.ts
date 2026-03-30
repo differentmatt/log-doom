@@ -5,7 +5,12 @@ export interface Category {
   color: string
 }
 
-export const categories: Category[] = [
+export interface StoredCategory extends Category {
+  sortOrder: number
+  deleted: boolean
+}
+
+export const defaultCategories: Category[] = [
   {
     id: 'dr-1on1',
     label: 'Direct Report 1:1s',
@@ -78,6 +83,25 @@ export const categories: Category[] = [
     description: 'Donuts, lunches, social events, anything that doesn\'t fit elsewhere',
     color: '#78716c',
   },
+]
+
+export const colorPalette = [
+  '#2563eb',
+  '#7c3aed',
+  '#db2777',
+  '#e11d48',
+  '#ea580c',
+  '#d97706',
+  '#65a30d',
+  '#16a34a',
+  '#0d9488',
+  '#0891b2',
+  '#6366f1',
+  '#78716c',
+  '#dc2626',
+  '#c026d3',
+  '#059669',
+  '#4f46e5',
 ]
 
 export const hourOptions = [0.5, 1, 1.5, 2, 3, 4, 5] as const

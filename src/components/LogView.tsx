@@ -1,6 +1,5 @@
-import { useState, useCallback } from 'react'
-import { categories } from '../categories'
-import { getDayLog, setHours, resetDay, todayString, formatDate } from '../storage'
+import { useState, useCallback, useRef } from 'react'
+import { getCategories, getDayLog, setHours, resetDay, todayString, formatDate } from '../storage'
 import DateNav from './DateNav'
 import CategoryRow from './CategoryRow'
 
@@ -9,13 +8,31 @@ interface LogViewProps {
   onSummary: () => void
 }
 
+function archivedIdsWithData(date: string): Set<string> {
+  const log = getDayLog(date)
+  const allCats = getCategories()
+  return new Set(
+    allCats.filter((c) => c.deleted && (log[c.id] ?? 0) > 0).map((c) => c.id)
+  )
+}
+
 export default function LogView({ initialDate, onSummary }: LogViewProps) {
   const [date, setDate] = useState(initialDate ?? todayString())
   const [log, setLog] = useState<Record<string, number>>(() => getDayLog(date))
+  const stickyArchivedIds = useRef<Set<string>>(archivedIdsWithData(initialDate ?? todayString()))
+
+  const allCats = getCategories()
+  const activeCats = allCats
+    .filter((c) => !c.deleted)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+  const archivedVisible = allCats.filter(
+    (c) => c.deleted && stickyArchivedIds.current.has(c.id)
+  )
 
   const refreshLog = useCallback((d: string) => {
     setDate(d)
     setLog(getDayLog(d))
+    stickyArchivedIds.current = archivedIdsWithData(d)
   }, [])
 
   function shiftDay(offset: number) {
@@ -48,7 +65,7 @@ export default function LogView({ initialDate, onSummary }: LogViewProps) {
         onToday={() => refreshLog(todayString())}
       />
       <div>
-        {categories.map((cat) => (
+        {activeCats.map((cat) => (
           <CategoryRow
             key={cat.id}
             category={cat}
@@ -57,6 +74,22 @@ export default function LogView({ initialDate, onSummary }: LogViewProps) {
           />
         ))}
       </div>
+      {archivedVisible.length > 0 && (
+        <div className="mt-4">
+          <div className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+            Archived
+          </div>
+          {archivedVisible.map((cat) => (
+            <div key={cat.id} className="opacity-60">
+              <CategoryRow
+                category={cat}
+                value={log[cat.id] ?? 0}
+                onChange={(h) => handleChange(cat.id, h)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flex gap-3 mt-4 pb-8">
         {hasData && (
           <button

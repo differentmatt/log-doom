@@ -1,5 +1,4 @@
-import { categories } from '../categories'
-import { getRecentDays } from '../storage'
+import { getCategories, getRecentDays } from '../storage'
 
 interface SummaryViewProps {
   onBack: () => void
@@ -18,7 +17,8 @@ function formatDisplay(dateStr: string): string {
 
 export default function SummaryView({ onBack, onNavigateToDay }: SummaryViewProps) {
   const days = getRecentDays(14)
-  const catMap = new Map(categories.map((c) => [c.id, c]))
+  const allCats = getCategories()
+  const catMap = new Map(allCats.map((c) => [c.id, c]))
 
   const totals: Record<string, number> = {}
   let grandTotal = 0
@@ -55,7 +55,9 @@ export default function SummaryView({ onBack, onNavigateToDay }: SummaryViewProp
         <div className="mt-2 space-y-2">
           {sorted.map(([catId, hours]) => {
             const cat = catMap.get(catId)
-            if (!cat) return null
+            const label = cat ? cat.label : catId
+            const color = cat?.color ?? '#78716c'
+            const isDeleted = cat?.deleted ?? false
             const pct = grandTotal > 0 ? Math.round((hours / grandTotal) * 100) : 0
             const barWidth = maxHours > 0 ? (hours / maxHours) * 100 : 0
             return (
@@ -63,10 +65,12 @@ export default function SummaryView({ onBack, onNavigateToDay }: SummaryViewProp
                 <div className="flex items-center justify-between text-xs mb-0.5">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: cat.color }}
+                      className={`w-2.5 h-2.5 rounded-full shrink-0${isDeleted ? ' ring-1 ring-zinc-600' : ''}`}
+                      style={{ backgroundColor: color }}
                     />
-                    <span className="text-zinc-300 truncate">{cat.label}</span>
+                    <span className={isDeleted ? 'text-zinc-500 truncate italic' : 'text-zinc-300 truncate'}>
+                      {label}{isDeleted ? ' (archived)' : ''}
+                    </span>
                   </div>
                   <span className="text-zinc-500 shrink-0 ml-2">
                     {hours}h &middot; {pct}%
@@ -74,8 +78,8 @@ export default function SummaryView({ onBack, onNavigateToDay }: SummaryViewProp
                 </div>
                 <div className="h-3 bg-zinc-800 rounded overflow-hidden ml-4">
                   <div
-                    className="h-full rounded"
-                    style={{ width: `${barWidth}%`, backgroundColor: cat.color }}
+                    className={`h-full rounded${isDeleted ? ' opacity-60' : ''}`}
+                    style={{ width: `${barWidth}%`, backgroundColor: color }}
                   />
                 </div>
               </div>

@@ -1,8 +1,13 @@
+import { type StoredCategory, defaultCategories } from './categories'
+
 const PREFIX = 'logdoom'
+const CATEGORIES_KEY = `${PREFIX}:categories`
 
 function key(date: string): string {
   return `${PREFIX}:${date}`
 }
+
+// --- Day log functions ---
 
 export function getDayLog(date: string): Record<string, number> {
   const raw = localStorage.getItem(key(date))
@@ -56,4 +61,81 @@ export function formatDate(d: Date): string {
 
 export function todayString(): string {
   return formatDate(new Date())
+}
+
+// --- Category functions ---
+
+function seedCategories(): StoredCategory[] {
+  const cats: StoredCategory[] = defaultCategories.map((c, i) => ({
+    ...c,
+    sortOrder: i,
+    deleted: false,
+  }))
+  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(cats))
+  return cats
+}
+
+export function getCategories(): StoredCategory[] {
+  const raw = localStorage.getItem(CATEGORIES_KEY)
+  if (!raw) return seedCategories()
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return seedCategories()
+  }
+}
+
+function saveCategories(cats: StoredCategory[]): void {
+  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(cats))
+}
+
+export function addCategory(cat: { label: string; description: string; color: string }): StoredCategory {
+  const cats = getCategories()
+  const maxOrder = cats.reduce((max, c) => Math.max(max, c.sortOrder), -1)
+  const newCat: StoredCategory = {
+    id: crypto.randomUUID(),
+    label: cat.label,
+    description: cat.description,
+    color: cat.color,
+    sortOrder: maxOrder + 1,
+    deleted: false,
+  }
+  cats.push(newCat)
+  saveCategories(cats)
+  return newCat
+}
+
+export function updateCategory(id: string, updates: Partial<Pick<StoredCategory, 'label' | 'description' | 'color'>>): void {
+  const cats = getCategories()
+  const cat = cats.find((c) => c.id === id)
+  if (!cat) return
+  if (updates.label !== undefined) cat.label = updates.label
+  if (updates.description !== undefined) cat.description = updates.description
+  if (updates.color !== undefined) cat.color = updates.color
+  saveCategories(cats)
+}
+
+export function deleteCategory(id: string): void {
+  const cats = getCategories()
+  const cat = cats.find((c) => c.id === id)
+  if (!cat) return
+  cat.deleted = true
+  saveCategories(cats)
+}
+
+export function restoreCategory(id: string): void {
+  const cats = getCategories()
+  const cat = cats.find((c) => c.id === id)
+  if (!cat) return
+  cat.deleted = false
+  saveCategories(cats)
+}
+
+export function reorderCategories(orderedIds: string[]): void {
+  const cats = getCategories()
+  orderedIds.forEach((id, index) => {
+    const cat = cats.find((c) => c.id === id)
+    if (cat) cat.sortOrder = index
+  })
+  saveCategories(cats)
 }

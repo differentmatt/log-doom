@@ -40,13 +40,14 @@ export default function DateNav({ date, totalHours, onPrev, onNext, onToday }: D
             onClick={onToday}
             className="text-xs text-blue-400 hover:text-blue-300 mt-0.5"
           >
-            Today
+            Go to today
           </button>
         )}
       </div>
       <button
         onClick={onNext}
-        className="h-10 w-10 flex items-center justify-center text-lg text-zinc-400 hover:text-zinc-100"
+        disabled={isToday}
+        className="h-10 w-10 flex items-center justify-center text-lg text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:cursor-default"
         aria-label="Next day"
       >
         &rarr;
