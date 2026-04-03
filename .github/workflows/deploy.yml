@@ -20,6 +20,8 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm run lint
+      - run: npm test -- --run
       - run: npm run build
 
       - uses: aws-actions/configure-aws-credentials@v4
