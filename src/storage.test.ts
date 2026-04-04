@@ -1,18 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import {
   getDayLog,
+  getDayTimestamp,
+  setDayLogWithTimestamp,
   setHours,
   resetDay,
   getRecentDays,
   formatDate,
   getCategories,
+  getCategoriesTimestamp,
+  setCategoriesWithTimestamp,
   addCategory,
   updateCategory,
   deleteCategory,
   restoreCategory,
   reorderCategories,
 } from './storage'
-import { defaultCategories } from './categories'
+import { defaultCategories, type StoredCategory } from './categories'
 
 // --- Day log functions ---
 
@@ -22,7 +26,10 @@ describe('getDayLog', () => {
   })
 
   it('returns stored log data', () => {
-    localStorage.setItem('logdoom:2025-01-15', JSON.stringify({ 'dr-1on1': 2 }))
+    localStorage.setItem(
+      'logdoom:2025-01-15',
+      JSON.stringify({ log: { 'dr-1on1': 2 }, updatedAt: '2025-01-15T10:00:00.000Z' }),
+    )
     expect(getDayLog('2025-01-15')).toEqual({ 'dr-1on1': 2 })
   })
 
@@ -32,10 +39,45 @@ describe('getDayLog', () => {
   })
 })
 
+describe('getDayTimestamp', () => {
+  it('returns null when no data exists', () => {
+    expect(getDayTimestamp('2025-01-15')).toBeNull()
+  })
+
+  it('returns timestamp', () => {
+    localStorage.setItem(
+      'logdoom:2025-01-15',
+      JSON.stringify({ log: { 'dr-1on1': 2 }, updatedAt: '2025-01-15T10:00:00.000Z' }),
+    )
+    expect(getDayTimestamp('2025-01-15')).toBe('2025-01-15T10:00:00.000Z')
+  })
+
+  it('returns null for invalid JSON', () => {
+    localStorage.setItem('logdoom:2025-01-15', 'not-json')
+    expect(getDayTimestamp('2025-01-15')).toBeNull()
+  })
+})
+
+describe('setDayLogWithTimestamp', () => {
+  it('writes wrapped format', () => {
+    setDayLogWithTimestamp('2025-01-15', { 'dr-1on1': 2 }, '2025-01-15T10:00:00.000Z')
+    const raw = JSON.parse(localStorage.getItem('logdoom:2025-01-15')!)
+    expect(raw.log).toEqual({ 'dr-1on1': 2 })
+    expect(raw.updatedAt).toBe('2025-01-15T10:00:00.000Z')
+  })
+
+  it('removes key when log is empty', () => {
+    setDayLogWithTimestamp('2025-01-15', { 'dr-1on1': 2 }, '2025-01-15T10:00:00.000Z')
+    setDayLogWithTimestamp('2025-01-15', {}, '2025-01-15T11:00:00.000Z')
+    expect(localStorage.getItem('logdoom:2025-01-15')).toBeNull()
+  })
+})
+
 describe('setHours', () => {
-  it('stores hours for a category', () => {
+  it('stores hours for a category in wrapped format', () => {
     setHours('2025-01-15', 'dr-1on1', 2)
     expect(getDayLog('2025-01-15')).toEqual({ 'dr-1on1': 2 })
+    expect(getDayTimestamp('2025-01-15')).toEqual(expect.any(String))
   })
 
   it('removes category when hours set to 0', () => {
@@ -121,13 +163,18 @@ describe('getCategories', () => {
 
   it('persists seeded categories to localStorage', () => {
     getCategories()
-    expect(localStorage.getItem('logdoom:categories')).not.toBeNull()
+    const raw = JSON.parse(localStorage.getItem('logdoom:categories')!)
+    expect(raw.categories).toBeDefined()
+    expect(raw.updatedAt).toEqual(expect.any(String))
   })
 
   it('returns previously stored categories', () => {
     const cats = getCategories()
     cats[0].label = 'Modified'
-    localStorage.setItem('logdoom:categories', JSON.stringify(cats))
+    localStorage.setItem(
+      'logdoom:categories',
+      JSON.stringify({ categories: cats, updatedAt: '2025-01-15T10:00:00.000Z' }),
+    )
     expect(getCategories()[0].label).toBe('Modified')
   })
 
@@ -135,6 +182,30 @@ describe('getCategories', () => {
     localStorage.setItem('logdoom:categories', 'bad-json')
     const cats = getCategories()
     expect(cats).toHaveLength(defaultCategories.length)
+  })
+})
+
+describe('getCategoriesTimestamp', () => {
+  it('returns null when no data exists', () => {
+    expect(getCategoriesTimestamp()).toBeNull()
+  })
+
+  it('returns timestamp', () => {
+    localStorage.setItem(
+      'logdoom:categories',
+      JSON.stringify({ categories: [{ id: 'cat1' }], updatedAt: '2025-01-15T10:00:00.000Z' }),
+    )
+    expect(getCategoriesTimestamp()).toBe('2025-01-15T10:00:00.000Z')
+  })
+})
+
+describe('setCategoriesWithTimestamp', () => {
+  it('writes wrapped format', () => {
+    const cats: StoredCategory[] = [{ id: 'cat1', label: 'Test', description: '', color: '#fff', sortOrder: 0, deleted: false }]
+    setCategoriesWithTimestamp(cats, '2025-01-15T10:00:00.000Z')
+    const raw = JSON.parse(localStorage.getItem('logdoom:categories')!)
+    expect(raw.categories).toEqual(cats)
+    expect(raw.updatedAt).toBe('2025-01-15T10:00:00.000Z')
   })
 })
 

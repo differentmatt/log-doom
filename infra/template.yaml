@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Log Doom — S3 + CloudFront static site with GitHub Actions OIDC deploy
+Description: Log Doom — S3 + CloudFront static site with API backend and GitHub Actions OIDC deploy
 
 Parameters:
   CertificateArn:
@@ -18,6 +18,10 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Set to false if GitHub OIDC provider already exists in this account
+  GoogleClientId:
+    Type: String
+    Default: ''
+    Description: Google OAuth client ID for JWT verification
 
 Conditions:
   ShouldCreateOIDCProvider: !Equals [!Ref CreateOIDCProvider, 'true']
@@ -42,6 +46,185 @@ Resources:
         SigningBehavior: always
         SigningProtocol: sigv4
 
+  # --- DynamoDB ---
+
+  DataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-data'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  # --- Lambda ---
+
+  ApiLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-api-lambda'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource: !GetAtt DataTable.Arn
+
+  DaysFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-days'
+      Runtime: nodejs20.x
+      Architectures: [arm64]
+      Handler: handlers/days.handler
+      MemorySize: 256
+      Timeout: 10
+      Role: !GetAtt ApiLambdaRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DataTable
+          GOOGLE_CLIENT_ID: !Ref GoogleClientId
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({ statusCode: 503, body: '{"error":"Not deployed yet"}' });
+
+  SettingsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-settings'
+      Runtime: nodejs20.x
+      Architectures: [arm64]
+      Handler: handlers/settings.handler
+      MemorySize: 256
+      Timeout: 10
+      Role: !GetAtt ApiLambdaRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DataTable
+          GOOGLE_CLIENT_ID: !Ref GoogleClientId
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({ statusCode: 503, body: '{"error":"Not deployed yet"}' });
+
+  # --- API Gateway v2 (HTTP API) ---
+
+  Api:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}-api'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - https://logdoom.com
+          - https://www.logdoom.com
+        AllowMethods:
+          - GET
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        MaxAge: 86400
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref Api
+      StageName: '$default'
+      AutoDeploy: true
+
+  DaysIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref Api
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt DaysFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  SettingsIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref Api
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt SettingsFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  DaysGetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: 'GET /api/days'
+      Target: !Sub 'integrations/${DaysIntegration}'
+
+  DaysPutRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: 'PUT /api/days/{date}'
+      Target: !Sub 'integrations/${DaysIntegration}'
+
+  DaysDeleteRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: 'DELETE /api/days/{date}'
+      Target: !Sub 'integrations/${DaysIntegration}'
+
+  SettingsGetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: 'GET /api/settings'
+      Target: !Sub 'integrations/${SettingsIntegration}'
+
+  SettingsPutRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: 'PUT /api/settings'
+      Target: !Sub 'integrations/${SettingsIntegration}'
+
+  DaysFunctionApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DaysFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*'
+
+  SettingsFunctionApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SettingsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*'
+
+  # --- CloudFront ---
+
   Distribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -62,11 +245,31 @@ Resources:
             OriginAccessControlId: !Ref CloudFrontOAC
             S3OriginConfig:
               OriginAccessIdentity: ''
+          - Id: ApiOrigin
+            DomainName: !Sub '${Api}.execute-api.${AWS::Region}.amazonaws.com'
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
           Compress: true
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: ApiOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # AllViewerExceptHostHeader
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+              - PUT
+              - PATCH
+              - POST
+              - DELETE
+            Compress: true
         CustomErrorResponses:
           - ErrorCode: 403
             ResponseCode: 200
@@ -139,6 +342,13 @@ Resources:
               - Effect: Allow
                 Action: cloudfront:CreateInvalidation
                 Resource: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+              - Effect: Allow
+                Action:
+                  - lambda:UpdateFunctionCode
+                  - lambda:GetFunction
+                Resource:
+                  - !GetAtt DaysFunction.Arn
+                  - !GetAtt SettingsFunction.Arn
 
 Outputs:
   BucketName:
@@ -149,3 +359,7 @@ Outputs:
     Value: !GetAtt Distribution.DomainName
   DeployRoleArn:
     Value: !GetAtt DeployRole.Arn
+  DaysFunctionName:
+    Value: !Ref DaysFunction
+  SettingsFunctionName:
+    Value: !Ref SettingsFunction

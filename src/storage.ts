@@ -1,4 +1,5 @@
 import { type StoredCategory, defaultCategories } from './categories'
+import { syncDayLog, syncSettings } from './sync'
 
 const PREFIX = 'logdoom'
 const CATEGORIES_KEY = `${PREFIX}:categories`
@@ -7,15 +8,41 @@ function key(date: string): string {
   return `${PREFIX}:${date}`
 }
 
+function now(): string {
+  return new Date().toISOString()
+}
+
 // --- Day log functions ---
 
 export function getDayLog(date: string): Record<string, number> {
   const raw = localStorage.getItem(key(date))
   if (!raw) return {}
   try {
-    return JSON.parse(raw)
+    return JSON.parse(raw).log
   } catch {
     return {}
+  }
+}
+
+export function getDayTimestamp(date: string): string | null {
+  const raw = localStorage.getItem(key(date))
+  if (!raw) return null
+  try {
+    return JSON.parse(raw).updatedAt ?? null
+  } catch {
+    return null
+  }
+}
+
+export function setDayLogWithTimestamp(
+  date: string,
+  log: Record<string, number>,
+  updatedAt: string,
+): void {
+  if (Object.keys(log).length === 0) {
+    localStorage.removeItem(key(date))
+  } else {
+    localStorage.setItem(key(date), JSON.stringify({ log, updatedAt }))
   }
 }
 
@@ -26,15 +53,19 @@ export function setHours(date: string, categoryId: string, hours: number): void 
   } else {
     log[categoryId] = hours
   }
+  const updatedAt = now()
   if (Object.keys(log).length === 0) {
     localStorage.removeItem(key(date))
   } else {
-    localStorage.setItem(key(date), JSON.stringify(log))
+    localStorage.setItem(key(date), JSON.stringify({ log, updatedAt }))
   }
+  syncDayLog(date, log, updatedAt)
 }
 
 export function resetDay(date: string): void {
   localStorage.removeItem(key(date))
+  const updatedAt = now()
+  syncDayLog(date, {}, updatedAt)
 }
 
 export function getRecentDays(n: number): { date: string; log: Record<string, number> }[] {
@@ -71,7 +102,8 @@ function seedCategories(): StoredCategory[] {
     sortOrder: i,
     deleted: false,
   }))
-  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(cats))
+  const updatedAt = now()
+  localStorage.setItem(CATEGORIES_KEY, JSON.stringify({ categories: cats, updatedAt }))
   return cats
 }
 
@@ -79,14 +111,30 @@ export function getCategories(): StoredCategory[] {
   const raw = localStorage.getItem(CATEGORIES_KEY)
   if (!raw) return seedCategories()
   try {
-    return JSON.parse(raw)
+    return JSON.parse(raw).categories
   } catch {
     return seedCategories()
   }
 }
 
+export function getCategoriesTimestamp(): string | null {
+  const raw = localStorage.getItem(CATEGORIES_KEY)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw).updatedAt ?? null
+  } catch {
+    return null
+  }
+}
+
+export function setCategoriesWithTimestamp(cats: StoredCategory[], updatedAt: string): void {
+  localStorage.setItem(CATEGORIES_KEY, JSON.stringify({ categories: cats, updatedAt }))
+}
+
 function saveCategories(cats: StoredCategory[]): void {
-  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(cats))
+  const updatedAt = now()
+  localStorage.setItem(CATEGORIES_KEY, JSON.stringify({ categories: cats, updatedAt }))
+  syncSettings(cats, updatedAt)
 }
 
 export function addCategory(cat: { label: string; description: string; color: string }): StoredCategory {

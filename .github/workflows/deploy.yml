@@ -19,12 +19,28 @@ jobs:
           node-version: 20
           cache: npm
 
+      # Frontend
       - run: npm ci
       - run: npm run lint
       - run: npm test -- --run
       - run: npm run build
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+
+      # Backend
+      - name: Install backend deps
+        run: cd backend && npm ci
+
+      - name: Run backend tests
+        run: cd backend && npx vitest run
+
+      - name: Package backend
+        run: |
+          cd backend
+          rm -rf node_modules
+          npm ci --omit=dev
+          zip -r ../backend.zip handlers/ lib/ node_modules/
+          cd ..
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -40,6 +56,15 @@ jobs:
           # Hashed assets — cache forever (Vite fingerprints filenames)
           aws s3 sync dist/assets/ s3://${{ vars.S3_BUCKET }}/assets/ \
             --cache-control "public, max-age=31536000, immutable"
+
+      - name: Deploy Lambda functions
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ vars.DAYS_FUNCTION_NAME }} \
+            --zip-file fileb://backend.zip
+          aws lambda update-function-code \
+            --function-name ${{ vars.SETTINGS_FUNCTION_NAME }} \
+            --zip-file fileb://backend.zip
 
       - name: Invalidate CloudFront
         run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"

@@ -5,6 +5,7 @@ import SettingsView from './components/SettingsView'
 import AuthButton from './components/AuthButton'
 import { loadStoredUser, initGoogleAuth, signOut } from './auth'
 import type { AuthUser } from './auth'
+import { initSync, updateSyncUser } from './sync'
 
 type View = { name: 'log'; date?: string } | { name: 'summary' } | { name: 'settings' }
 
@@ -13,10 +14,17 @@ export default function App() {
   const [catVersion, setCatVersion] = useState(0)
   const [user, setUser] = useState<AuthUser | null>(() => loadStoredUser())
   const [gisReady, setGisReady] = useState(false)
+  const [syncVersion, setSyncVersion] = useState(0)
 
   useEffect(() => {
+    initSync(user, () => setSyncVersion((v) => v + 1))
     initGoogleAuth((u) => setUser(u), () => setGisReady(true))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    updateSyncUser(user)
+  }, [user])
 
   function handleSignOut() {
     signOut(user)
@@ -50,13 +58,13 @@ export default function App() {
         </header>
         {view.name === 'log' ? (
           <LogView
-            key={`${view.date ?? 'today'}-${catVersion}`}
+            key={`${view.date ?? 'today'}-${catVersion}-${syncVersion}`}
             initialDate={view.date}
             onSummary={() => setView({ name: 'summary' })}
           />
         ) : view.name === 'summary' ? (
           <SummaryView
-            key={`summary-${catVersion}`}
+            key={`summary-${catVersion}-${syncVersion}`}
             onBack={() => setView({ name: 'log' })}
             onNavigateToDay={(date) => setView({ name: 'log', date })}
           />

@@ -4,6 +4,7 @@ set -euo pipefail
 STACK_NAME="log-doom"
 DOMAIN="logdoom.com"
 REGION="us-east-1"
+GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}"
 
 echo "=== Log Doom Infrastructure Setup ==="
 echo ""
@@ -118,6 +119,7 @@ aws cloudformation deploy \
   --parameter-overrides \
     "CertificateArn=${CERT_ARN}" \
     "CreateOIDCProvider=${CREATE_OIDC}" \
+    "GoogleClientId=${GOOGLE_CLIENT_ID}" \
   --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset
 
@@ -150,12 +152,27 @@ ROLE_ARN=$(aws cloudformation describe-stacks \
   --query "Stacks[0].Outputs[?OutputKey=='DeployRoleArn'].OutputValue | [0]" \
   --output text)
 
+DAYS_FN=$(aws cloudformation describe-stacks \
+  --region "${REGION}" \
+  --stack-name "${STACK_NAME}" \
+  --query "Stacks[0].Outputs[?OutputKey=='DaysFunctionName'].OutputValue | [0]" \
+  --output text)
+
+SETTINGS_FN=$(aws cloudformation describe-stacks \
+  --region "${REGION}" \
+  --stack-name "${STACK_NAME}" \
+  --query "Stacks[0].Outputs[?OutputKey=='SettingsFunctionName'].OutputValue | [0]" \
+  --output text)
+
 # Step 7: Set GitHub repo variables if gh CLI is available
 if command -v gh &>/dev/null; then
   echo "Setting GitHub repo variables via gh CLI..."
   gh variable set AWS_ROLE_ARN --body "${ROLE_ARN}"
   gh variable set S3_BUCKET --body "${BUCKET}"
   gh variable set CLOUDFRONT_DISTRIBUTION_ID --body "${DIST_ID}"
+  gh variable set DAYS_FUNCTION_NAME --body "${DAYS_FN}"
+  gh variable set SETTINGS_FUNCTION_NAME --body "${SETTINGS_FN}"
+  [[ -n "${GOOGLE_CLIENT_ID}" ]] && gh variable set VITE_GOOGLE_CLIENT_ID --body "${GOOGLE_CLIENT_ID}"
   echo "GitHub variables set."
   echo ""
 fi
@@ -167,6 +184,8 @@ echo "  S3 Bucket:         ${BUCKET}"
 echo "  Distribution ID:   ${DIST_ID}"
 echo "  CloudFront Domain: ${DIST_DOMAIN}"
 echo "  Deploy Role ARN:   ${ROLE_ARN}"
+echo "  Days Function:     ${DAYS_FN}"
+echo "  Settings Function: ${SETTINGS_FN}"
 echo ""
 echo "  Next steps:"
 echo ""
