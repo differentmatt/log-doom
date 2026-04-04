@@ -56,7 +56,7 @@ jobs:
             --parameter-overrides \
               CertificateArn=${{ vars.ACM_CERTIFICATE_ARN }} \
               GoogleClientId=${{ vars.VITE_GOOGLE_CLIENT_ID }} \
-              CreateOIDCProvider=false \
+              CreateOIDCProvider=${{ vars.CREATE_OIDC_PROVIDER }} \
             --no-fail-on-empty-changeset
 
       - name: Deploy to S3

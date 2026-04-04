@@ -204,6 +204,7 @@ if command -v gh &>/dev/null; then
   gh variable set DAYS_FUNCTION_NAME --body "${DAYS_FN}"
   gh variable set SETTINGS_FUNCTION_NAME --body "${SETTINGS_FN}"
   gh variable set ACM_CERTIFICATE_ARN --body "${STACK_CERT_ARN}"
+  gh variable set CREATE_OIDC_PROVIDER --body "${CREATE_OIDC}"
   [[ -n "${GOOGLE_CLIENT_ID}" ]] && gh variable set VITE_GOOGLE_CLIENT_ID --body "${GOOGLE_CLIENT_ID}"
   echo "GitHub variables set."
   echo ""
