@@ -18,7 +18,9 @@ export function getDayLog(date: string): Record<string, number> {
   const raw = localStorage.getItem(key(date))
   if (!raw) return {}
   try {
-    return JSON.parse(raw).log
+    const parsed = JSON.parse(raw)
+    // Legacy format: plain log object; new format: { log, updatedAt }
+    return parsed.log ?? parsed
   } catch {
     return {}
   }
@@ -111,7 +113,9 @@ export function getCategories(): StoredCategory[] {
   const raw = localStorage.getItem(CATEGORIES_KEY)
   if (!raw) return seedCategories()
   try {
-    return JSON.parse(raw).categories
+    const parsed = JSON.parse(raw)
+    // Legacy format: plain array; new format: { categories, updatedAt }
+    return parsed.categories ?? parsed
   } catch {
     return seedCategories()
   }
