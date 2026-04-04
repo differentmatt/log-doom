@@ -17,9 +17,13 @@ function archivedIdsWithData(date: string): Set<string> {
 }
 
 export default function LogView({ initialDate, onSummary }: LogViewProps) {
-  const [date, setDate] = useState(initialDate ?? todayString())
+  const [date, setDate] = useState(() => {
+    const d = initialDate ?? sessionStorage.getItem('logdoom:date') ?? todayString()
+    sessionStorage.setItem('logdoom:date', d)
+    return d
+  })
   const [log, setLog] = useState<Record<string, number>>(() => getDayLog(date))
-  const stickyArchivedIds = useRef<Set<string>>(archivedIdsWithData(initialDate ?? todayString()))
+  const stickyArchivedIds = useRef<Set<string>>(archivedIdsWithData(date))
 
   const allCats = getCategories()
   const activeCats = allCats
@@ -31,6 +35,7 @@ export default function LogView({ initialDate, onSummary }: LogViewProps) {
 
   const refreshLog = useCallback((d: string) => {
     setDate(d)
+    sessionStorage.setItem('logdoom:date', d)
     setLog(getDayLog(d))
     stickyArchivedIds.current = archivedIdsWithData(d)
   }, [])
