@@ -96,6 +96,55 @@ export function todayString(): string {
   return formatDate(new Date())
 }
 
+export function getWeekStart(date: string): string {
+  const [year, month, day] = date.split('-').map(Number)
+  const d = new Date(year, month - 1, day)
+  const dow = d.getDay() // 0=Sun, 1=Mon, ...
+  const diff = dow === 0 ? 6 : dow - 1 // days since Monday
+  d.setDate(d.getDate() - diff)
+  return formatDate(d)
+}
+
+export function getWeekEnd(weekStart: string): string {
+  const [year, month, day] = weekStart.split('-').map(Number)
+  const d = new Date(year, month - 1, day)
+  d.setDate(d.getDate() + 6)
+  return formatDate(d)
+}
+
+export function getDaysInRange(
+  start: string,
+  end: string,
+): { date: string; log: Record<string, number> }[] {
+  const results: { date: string; log: Record<string, number> }[] = []
+  const [sy, sm, sd] = start.split('-').map(Number)
+  const [ey, em, ed] = end.split('-').map(Number)
+  const startD = new Date(sy, sm - 1, sd)
+  const endD = new Date(ey, em - 1, ed)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  for (let d = new Date(startD); d <= endD && d <= today; d.setDate(d.getDate() + 1)) {
+    const date = formatDate(d)
+    const log = getDayLog(date)
+    results.push({ date, log })
+  }
+  return results
+}
+
+export function getRecentWeeks(n: number): string[] {
+  const today = new Date()
+  const todayStr = formatDate(today)
+  const thisMonday = getWeekStart(todayStr)
+  const [year, month, day] = thisMonday.split('-').map(Number)
+  const weeks: string[] = []
+  for (let i = 0; i < n; i++) {
+    const d = new Date(year, month - 1, day)
+    d.setDate(d.getDate() - i * 7)
+    weeks.push(formatDate(d))
+  }
+  return weeks
+}
+
 // --- Category functions ---
 
 function seedCategories(): StoredCategory[] {

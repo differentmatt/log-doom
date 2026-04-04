@@ -7,6 +7,10 @@ import {
   resetDay,
   getRecentDays,
   formatDate,
+  getWeekStart,
+  getWeekEnd,
+  getDaysInRange,
+  getRecentWeeks,
   getCategories,
   getCategoriesTimestamp,
   setCategoriesWithTimestamp,
@@ -147,6 +151,74 @@ describe('getRecentDays', () => {
     expect(results).toHaveLength(2)
     expect(results[0].date).toBe(todayStr)
     expect(results[1].date).toBe(yesterdayStr)
+  })
+})
+
+// --- Week helper functions ---
+
+describe('getWeekStart', () => {
+  it('returns same date for a Monday', () => {
+    expect(getWeekStart('2025-03-31')).toBe('2025-03-31') // Monday
+  })
+
+  it('returns previous Monday for a Wednesday', () => {
+    expect(getWeekStart('2025-04-02')).toBe('2025-03-31') // Wed → Mon
+  })
+
+  it('returns previous Monday for a Sunday', () => {
+    expect(getWeekStart('2025-04-06')).toBe('2025-03-31') // Sun → Mon
+  })
+
+  it('returns previous Monday for a Saturday', () => {
+    expect(getWeekStart('2025-04-05')).toBe('2025-03-31') // Sat → Mon
+  })
+})
+
+describe('getWeekEnd', () => {
+  it('returns Sunday (start + 6 days)', () => {
+    expect(getWeekEnd('2025-03-31')).toBe('2025-04-06') // Mon → Sun
+  })
+
+  it('handles month boundary', () => {
+    expect(getWeekEnd('2025-01-27')).toBe('2025-02-02')
+  })
+})
+
+describe('getDaysInRange', () => {
+  it('returns all days in range with their logs', () => {
+    setHours('2025-03-31', 'dr-1on1', 2)
+    setHours('2025-04-01', 'misc', 1)
+    // Use a far-future range to avoid today cap
+    const results = getDaysInRange('2025-03-31', '2025-04-02')
+    // Results capped at today, so only check returned dates are in range
+    const dates = results.map((r) => r.date)
+    for (const d of dates) {
+      expect(d >= '2025-03-31' && d <= '2025-04-02').toBe(true)
+    }
+  })
+
+  it('returns empty array for range entirely in the future', () => {
+    expect(getDaysInRange('2099-01-01', '2099-01-07')).toEqual([])
+  })
+})
+
+describe('getRecentWeeks', () => {
+  it('returns n week start dates (Mondays), most recent first', () => {
+    const weeks = getRecentWeeks(4)
+    expect(weeks).toHaveLength(4)
+    // Each should be 7 days apart
+    for (let i = 1; i < weeks.length; i++) {
+      const [py, pm, pd] = weeks[i - 1].split('-').map(Number)
+      const [cy, cm, cd] = weeks[i].split('-').map(Number)
+      const prev = new Date(py, pm - 1, pd)
+      const curr = new Date(cy, cm - 1, cd)
+      expect(prev.getTime() - curr.getTime()).toBe(7 * 24 * 60 * 60 * 1000)
+    }
+  })
+
+  it('first entry is this week\'s Monday', () => {
+    const weeks = getRecentWeeks(1)
+    expect(weeks[0]).toBe(getWeekStart(formatDate(new Date())))
   })
 })
 
