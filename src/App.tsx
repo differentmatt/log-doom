@@ -1,18 +1,37 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import LogView from './components/LogView'
 import SummaryView from './components/SummaryView'
 import SettingsView from './components/SettingsView'
+import AuthButton from './components/AuthButton'
+import { loadStoredUser, initGoogleAuth, signOut } from './auth'
+import type { AuthUser } from './auth'
 
 type View = { name: 'log'; date?: string } | { name: 'summary' } | { name: 'settings' }
 
 export default function App() {
   const [view, setView] = useState<View>({ name: 'log' })
   const [catVersion, setCatVersion] = useState(0)
+  const [user, setUser] = useState<AuthUser | null>(() => loadStoredUser())
+  const [gisReady, setGisReady] = useState(false)
+
+  useEffect(() => {
+    initGoogleAuth((u) => setUser(u), () => setGisReady(true))
+  }, [])
+
+  function handleSignOut() {
+    signOut(user)
+    setUser(null)
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="max-w-md mx-auto px-4">
         <header className="pt-4 pb-1 flex items-center justify-center relative">
+          <AuthButton
+            user={user}
+            onSignOut={handleSignOut}
+            gisReady={gisReady}
+          />
           <h1 className="text-lg font-bold tracking-tight text-zinc-100 flex items-center justify-center gap-2">
             <img src="/favicon-32.svg" alt="" width={20} height={20} />
             Log Doom
