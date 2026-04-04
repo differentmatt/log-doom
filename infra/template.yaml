@@ -22,9 +22,14 @@ Parameters:
     Type: String
     Default: ''
     Description: Google OAuth client ID for JWT verification
+  AlertEmail:
+    Type: String
+    Default: ''
+    Description: Email address for budget alarm notifications (optional)
 
 Conditions:
   ShouldCreateOIDCProvider: !Equals [!Ref CreateOIDCProvider, 'true']
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
 
 Resources:
   SiteBucket:
@@ -101,6 +106,7 @@ Resources:
       Handler: handlers/days.handler
       MemorySize: 256
       Timeout: 10
+      ReservedConcurrentExecutions: 10
       Role: !GetAtt ApiLambdaRole.Arn
       Environment:
         Variables:
@@ -119,6 +125,7 @@ Resources:
       Handler: handlers/settings.handler
       MemorySize: 256
       Timeout: 10
+      ReservedConcurrentExecutions: 10
       Role: !GetAtt ApiLambdaRole.Arn
       Environment:
         Variables:
@@ -155,6 +162,9 @@ Resources:
       ApiId: !Ref Api
       StageName: '$default'
       AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 100
 
   DaysIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -280,6 +290,35 @@ Resources:
             ResponsePagePath: /index.html
             ErrorCachingMinTTL: 10
 
+  # --- Budget Alarm ---
+
+  BudgetAlarm:
+    Type: AWS::Budgets::Budget
+    Condition: HasAlertEmail
+    Properties:
+      Budget:
+        BudgetName: !Sub '${AWS::StackName}-monthly'
+        BudgetLimit:
+          Amount: 5
+          Unit: USD
+        TimeUnit: MONTHLY
+        BudgetType: COST
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
   BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -371,6 +410,10 @@ Resources:
               # ACM (read-only, CloudFront needs to validate cert)
               - Effect: Allow
                 Action: acm:DescribeCertificate
+                Resource: '*'
+              # Budgets management
+              - Effect: Allow
+                Action: budgets:*
                 Resource: '*'
 
 Outputs:

@@ -5,6 +5,7 @@ STACK_NAME="log-doom"
 DOMAIN="logdoom.com"
 REGION="us-east-1"
 GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}"
+ALERT_EMAIL="${ALERT_EMAIL:-}"
 
 echo "=== Log Doom Infrastructure Setup ==="
 echo ""
@@ -145,6 +146,7 @@ aws cloudformation deploy \
     "CertificateArn=${CERT_ARN}" \
     "CreateOIDCProvider=${CREATE_OIDC}" \
     "GoogleClientId=${GOOGLE_CLIENT_ID}" \
+    "AlertEmail=${ALERT_EMAIL}" \
   --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset
 
@@ -198,14 +200,15 @@ STACK_CERT_ARN=$(aws cloudformation describe-stacks \
 # Step 7: Set GitHub repo variables if gh CLI is available
 if command -v gh &>/dev/null; then
   echo "Setting GitHub repo variables via gh CLI..."
-  gh variable set AWS_ROLE_ARN --body "${ROLE_ARN}"
+  gh secret set AWS_ROLE_ARN --body "${ROLE_ARN}"
   gh variable set S3_BUCKET --body "${BUCKET}"
   gh variable set CLOUDFRONT_DISTRIBUTION_ID --body "${DIST_ID}"
   gh variable set DAYS_FUNCTION_NAME --body "${DAYS_FN}"
   gh variable set SETTINGS_FUNCTION_NAME --body "${SETTINGS_FN}"
-  gh variable set ACM_CERTIFICATE_ARN --body "${STACK_CERT_ARN}"
+  gh secret set ACM_CERTIFICATE_ARN --body "${STACK_CERT_ARN}"
   gh variable set CREATE_OIDC_PROVIDER --body "${CREATE_OIDC}"
   [[ -n "${GOOGLE_CLIENT_ID}" ]] && gh variable set VITE_GOOGLE_CLIENT_ID --body "${GOOGLE_CLIENT_ID}"
+  [[ -n "${ALERT_EMAIL}" ]] && gh secret set ALERT_EMAIL --body "${ALERT_EMAIL}"
   echo "GitHub variables set."
   echo ""
 fi

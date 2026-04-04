@@ -44,7 +44,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Deploy infrastructure
@@ -54,9 +54,10 @@ jobs:
             --template-file infra/template.yaml \
             --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides \
-              CertificateArn=${{ vars.ACM_CERTIFICATE_ARN }} \
+              CertificateArn=${{ secrets.ACM_CERTIFICATE_ARN }} \
               GoogleClientId=${{ vars.VITE_GOOGLE_CLIENT_ID }} \
               CreateOIDCProvider=${{ vars.CREATE_OIDC_PROVIDER }} \
+              AlertEmail=${{ secrets.ALERT_EMAIL }} \
             --no-fail-on-empty-changeset
 
       - name: Deploy to S3
