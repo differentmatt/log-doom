@@ -100,7 +100,9 @@ export function initGoogleAuth(
         },
         auto_select: true,
       })
-      google.accounts.id.prompt()
+      if (!loadStoredUser()) {
+        google.accounts.id.prompt()
+      }
       onReady?.()
     })
     .catch((err) => {
