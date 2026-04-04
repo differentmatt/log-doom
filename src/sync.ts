@@ -60,7 +60,8 @@ async function migrateLocalData(): Promise<void> {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
     try {
       const parsed = JSON.parse(localStorage.getItem(key) || '{}')
-      await saveDayToApi(currentUser, date, parsed.log, parsed.updatedAt || new Date().toISOString())
+      const log = parsed.log ?? parsed
+      await saveDayToApi(currentUser, date, log, parsed.updatedAt || new Date().toISOString())
     } catch {
       // Skip malformed entries
     }
@@ -71,8 +72,9 @@ async function migrateLocalData(): Promise<void> {
   if (catsRaw) {
     try {
       const parsed = JSON.parse(catsRaw)
-      if (parsed.categories) {
-        await saveSettingsToApi(currentUser, parsed.categories as StoredCategory[], parsed.updatedAt || new Date().toISOString())
+      const cats = parsed.categories ?? parsed
+      if (Array.isArray(cats) && cats.length > 0) {
+        await saveSettingsToApi(currentUser, cats as StoredCategory[], parsed.updatedAt || new Date().toISOString())
       }
     } catch {
       // Skip
@@ -84,7 +86,7 @@ async function pullRemote(): Promise<void> {
   if (!currentUser) return
 
   // Auto-migration on first sign-in
-  const migrationKey = `logdoom:migrated:${currentUser.sub}`
+  const migrationKey = `logdoom:migrated:v2:${currentUser.sub}`
   if (!localStorage.getItem(migrationKey)) {
     await migrateLocalData()
     localStorage.setItem(migrationKey, 'true')

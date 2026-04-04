@@ -160,7 +160,7 @@ describe('migration', () => {
   })
 
   it('skips migration if already migrated', async () => {
-    localStorage.setItem('logdoom:migrated:123', 'true')
+    localStorage.setItem('logdoom:migrated:v2:123', 'true')
     // Use a date outside the 90-day window so merge won't push it
     localStorage.setItem('logdoom:2025-01-01', JSON.stringify({ log: { 'dr-1on1': 2 }, updatedAt: '2025-01-01T10:00:00.000Z' }))
 
@@ -179,7 +179,7 @@ describe('migration', () => {
 describe('merge logic', () => {
   beforeEach(() => {
     // Mark as already migrated to skip migration step
-    localStorage.setItem('logdoom:migrated:123', 'true')
+    localStorage.setItem('logdoom:migrated:v2:123', 'true')
   })
 
   it('accepts remote data when remote is newer', async () => {
