@@ -80,3 +80,14 @@ jobs:
 
       - name: Invalidate CloudFront
         run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+
+      - name: Smoke test API
+        run: |
+          sleep 5
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            'https://logdoom.com/api/days?from=2026-01-01&to=2026-01-01')
+          echo "API returned HTTP $STATUS"
+          if [ "$STATUS" = "500" ]; then
+            echo "::error::API smoke test failed"
+            exit 1
+          fi
