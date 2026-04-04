@@ -113,26 +113,24 @@ if [[ -z "${ACCOUNT_ID}" ]]; then
   exit 1
 fi
 
-# If the stack already exists, preserve its CreateOIDCProvider parameter
-# (flipping it would cause CloudFormation to delete a stack-managed OIDC provider)
-CURRENT_CREATE_OIDC=$(aws cloudformation describe-stacks \
-  --region "${REGION}" \
-  --stack-name "${STACK_NAME}" \
-  --query "Stacks[0].Parameters[?ParameterKey=='CreateOIDCProvider'].ParameterValue | [0]" \
-  --output text 2>/dev/null || echo "")
-
-if [[ -n "${CURRENT_CREATE_OIDC}" && "${CURRENT_CREATE_OIDC}" != "None" ]]; then
-  CREATE_OIDC="${CURRENT_CREATE_OIDC}"
-  echo "Preserving existing stack CreateOIDCProvider=${CREATE_OIDC}"
-else
-  OIDC_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
-  CREATE_OIDC="true"
-  if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "${OIDC_ARN}" >/dev/null 2>&1; then
-    echo "GitHub OIDC provider already exists, skipping creation."
-    CREATE_OIDC="false"
+OIDC_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "${OIDC_ARN}" >/dev/null 2>&1; then
+  # Provider exists — check if this stack manages it
+  CURRENT_CREATE_OIDC=$(aws cloudformation describe-stacks \
+    --region "${REGION}" \
+    --stack-name "${STACK_NAME}" \
+    --query "Stacks[0].Parameters[?ParameterKey=='CreateOIDCProvider'].ParameterValue | [0]" \
+    --output text 2>/dev/null || echo "")
+  if [[ "${CURRENT_CREATE_OIDC}" == "true" ]]; then
+    CREATE_OIDC="true"
+    echo "GitHub OIDC provider exists (stack-managed)."
   else
-    echo "GitHub OIDC provider will be created by the stack."
+    CREATE_OIDC="false"
+    echo "GitHub OIDC provider exists (external), skipping creation."
   fi
+else
+  CREATE_OIDC="true"
+  echo "GitHub OIDC provider will be created by the stack."
 fi
 
 # Step 5: Deploy CloudFormation stack
