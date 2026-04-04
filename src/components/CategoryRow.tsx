@@ -22,7 +22,7 @@ export default function CategoryRow({ category, value, onChange }: CategoryRowPr
         </span>
         <button
           onClick={() => setShowDesc(!showDesc)}
-          className="h-6 w-6 flex items-center justify-center text-xs text-zinc-200 shrink-0"
+          className="h-6 w-6 flex items-center justify-center text-xs text-blue-400 hover:text-blue-300 shrink-0"
           aria-label={`Info about ${category.label}`}
         >
           ?

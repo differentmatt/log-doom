@@ -63,6 +63,7 @@ export default function LogView({ initialDate, onSummary }: LogViewProps) {
         onPrev={() => shiftDay(-1)}
         onNext={() => shiftDay(1)}
         onToday={() => refreshLog(todayString())}
+        onSummary={onSummary}
       />
       <div>
         {activeCats.map((cat) => (
@@ -90,22 +91,16 @@ export default function LogView({ initialDate, onSummary }: LogViewProps) {
           ))}
         </div>
       )}
-      <div className="flex gap-3 mt-4 pb-8">
-        {hasData && (
+      {hasData && (
+        <div className="mt-4 pb-8">
           <button
             onClick={handleReset}
             className="h-10 px-4 rounded text-sm text-zinc-500 hover:text-zinc-300 border border-zinc-700 hover:border-zinc-500"
           >
             Reset day
           </button>
-        )}
-        <button
-          onClick={onSummary}
-          className="h-10 px-4 rounded text-sm text-zinc-100 bg-zinc-700 hover:bg-zinc-600 ml-auto"
-        >
-          Summary
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -99,10 +99,10 @@ describe('LogView', () => {
     const user = userEvent.setup()
     render(<LogView onSummary={noop} />)
 
-    await user.click(screen.getByLabelText('Previous day'))
+    expect(screen.queryByText('Today')).not.toBeInTheDocument()
 
-    // Should show "Go to today" link when not on today
-    expect(screen.getByText('Go to today')).toBeInTheDocument()
+    await user.click(screen.getByLabelText('Previous day'))
+    expect(screen.getByText('Today')).toBeInTheDocument()
   })
 
   it('navigates back to today after going to previous day', async () => {
@@ -110,9 +110,7 @@ describe('LogView', () => {
     render(<LogView onSummary={noop} />)
 
     await user.click(screen.getByLabelText('Previous day'))
-    expect(screen.getByText('Go to today')).toBeInTheDocument()
-
-    await user.click(screen.getByLabelText('Next day'))
-    expect(screen.queryByText('Go to today')).not.toBeInTheDocument()
+    await user.click(screen.getByText('Today'))
+    expect(screen.queryByText('Today')).not.toBeInTheDocument()
   })
 })

@@ -6,6 +6,7 @@ interface DateNavProps {
   onPrev: () => void
   onNext: () => void
   onToday: () => void
+  onSummary: () => void
 }
 
 function formatDisplay(dateStr: string): string {
@@ -18,39 +19,46 @@ function formatDisplay(dateStr: string): string {
   })
 }
 
-export default function DateNav({ date, totalHours, onPrev, onNext, onToday }: DateNavProps) {
+export default function DateNav({ date, totalHours, onPrev, onNext, onToday, onSummary }: DateNavProps) {
   const isToday = date === todayString()
 
   return (
-    <div className="flex items-center justify-between py-3">
-      <button
-        onClick={onPrev}
-        className="h-10 w-10 flex items-center justify-center text-lg text-zinc-400 hover:text-zinc-100"
-        aria-label="Previous day"
-      >
-        &larr;
-      </button>
-      <div className="text-center">
-        <div className="text-sm font-medium text-zinc-100">{formatDisplay(date)}</div>
-        <div className="text-xs text-zinc-500">
-          {totalHours > 0 ? `${totalHours}h logged` : 'no hours logged'}
-        </div>
-        {!isToday && (
+    <div className="py-3">
+      <div className="flex items-center">
+        <div className="w-20 flex items-center justify-start">
           <button
-            onClick={onToday}
-            className="text-xs text-blue-400 hover:text-blue-300 mt-0.5"
+            onClick={onPrev}
+            className="h-10 w-10 flex items-center justify-center text-lg text-blue-400 hover:text-blue-300"
+            aria-label="Previous day"
           >
-            Go to today
+            &larr;
           </button>
-        )}
+        </div>
+        <div className="text-sm font-medium text-zinc-100 text-center flex-1">{formatDisplay(date)}</div>
+        <div className="w-20 flex items-center justify-end gap-1.5">
+          {!isToday && (
+            <button
+              onClick={onToday}
+              className="text-xs text-blue-400 hover:text-blue-300"
+            >
+              Today
+            </button>
+          )}
+          <button
+            onClick={onNext}
+            disabled={isToday}
+            className="h-10 w-10 flex items-center justify-center text-lg text-blue-400 hover:text-blue-300 disabled:opacity-25 disabled:cursor-default shrink-0"
+            aria-label="Next day"
+          >
+            &rarr;
+          </button>
+        </div>
       </div>
       <button
-        onClick={onNext}
-        disabled={isToday}
-        className="h-10 w-10 flex items-center justify-center text-lg text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:cursor-default"
-        aria-label="Next day"
+        onClick={onSummary}
+        className="flex items-center justify-center mx-auto text-xs text-blue-400 hover:text-blue-300 mt-1"
       >
-        &rarr;
+        {totalHours > 0 ? `${totalHours}h logged` : 'no hours logged'}
       </button>
     </div>
   )
