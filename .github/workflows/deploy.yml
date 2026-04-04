@@ -59,15 +59,11 @@ jobs:
 
       - name: Deploy Lambda functions
         run: |
-          DAYS_FN=$(aws cloudformation describe-stacks --stack-name log-doom \
-            --query "Stacks[0].Outputs[?OutputKey=='DaysFunctionName'].OutputValue" --output text)
-          SETTINGS_FN=$(aws cloudformation describe-stacks --stack-name log-doom \
-            --query "Stacks[0].Outputs[?OutputKey=='SettingsFunctionName'].OutputValue" --output text)
           aws lambda update-function-code \
-            --function-name "$DAYS_FN" \
+            --function-name log-doom-days \
             --zip-file fileb://backend.zip
           aws lambda update-function-code \
-            --function-name "$SETTINGS_FN" \
+            --function-name log-doom-settings \
             --zip-file fileb://backend.zip
 
       - name: Invalidate CloudFront
