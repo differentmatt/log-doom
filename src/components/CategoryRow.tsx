@@ -11,8 +11,8 @@ export default function CategoryRow({ category, value, onChange }: CategoryRowPr
   const [showDesc, setShowDesc] = useState(false)
 
   return (
-    <div className="py-2 border-b border-zinc-800">
-      <div className="flex items-center gap-2 mb-1.5">
+    <div className="py-1">
+      <div className="flex items-center gap-2 mb-0.5">
         <span
           className="w-3 h-3 rounded-full shrink-0"
           style={{ backgroundColor: category.color }}
