@@ -5,7 +5,7 @@ import SettingsView from './components/SettingsView'
 import AuthButton from './components/AuthButton'
 import { loadStoredUser, initGoogleAuth, signOut } from './auth'
 import type { AuthUser } from './auth'
-import { initSync, updateSyncUser } from './sync'
+import { initSync, updateSyncUser, refreshSync } from './sync'
 
 type View = { name: 'log'; date?: string } | { name: 'summary' } | { name: 'settings' }
 
@@ -25,6 +25,14 @@ export default function App() {
   useEffect(() => {
     updateSyncUser(user)
   }, [user])
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refreshSync()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
 
   function handleSignOut() {
     signOut(user)

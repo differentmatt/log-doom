@@ -156,6 +156,12 @@ async function pullRemote(): Promise<void> {
   onChangeCallback?.()
 }
 
+export function refreshSync(): void {
+  if (currentUser) {
+    void pullRemote()
+  }
+}
+
 export function syncDayLog(date: string, log: Record<string, number>, updatedAt: string): void {
   if (!currentUser) return
   if (Object.keys(log).length === 0) {
