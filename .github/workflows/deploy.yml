@@ -47,6 +47,18 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: us-east-1
 
+      - name: Deploy infrastructure
+        run: |
+          aws cloudformation deploy \
+            --stack-name log-doom \
+            --template-file infra/template.yaml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              CertificateArn=${{ vars.ACM_CERTIFICATE_ARN }} \
+              GoogleClientId=${{ vars.VITE_GOOGLE_CLIENT_ID }} \
+              CreateOIDCProvider=false \
+            --no-fail-on-empty-changeset
+
       - name: Deploy to S3
         run: |
           # HTML — no cache (always revalidate)
