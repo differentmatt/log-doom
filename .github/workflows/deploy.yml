@@ -39,7 +39,7 @@ jobs:
           cd backend
           rm -rf node_modules
           npm ci --omit=dev
-          zip -r ../backend.zip handlers/ lib/ node_modules/
+          zip -r ../backend.zip package.json handlers/ lib/ node_modules/
           cd ..
 
       - uses: aws-actions/configure-aws-credentials@v4
