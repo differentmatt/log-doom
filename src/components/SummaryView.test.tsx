@@ -22,8 +22,8 @@ describe('SummaryView', () => {
 
   it('shows total hours for selected week', () => {
     const today = formatDate(new Date())
-    setHours(today, 'dr-1on1', 2)
-    setHours(today, 'misc', 3)
+    setHours('work', today, 'dr-1on1', 2)
+    setHours('work', today, 'misc', 3)
 
     render(<SummaryView onBack={noop} onNavigateToDay={noop} />)
     expect(screen.getByText('5h total')).toBeInTheDocument()
@@ -31,7 +31,7 @@ describe('SummaryView', () => {
 
   it('shows correct stats line', () => {
     const today = formatDate(new Date())
-    setHours(today, 'dr-1on1', 4)
+    setHours('work', today, 'dr-1on1', 4)
 
     render(<SummaryView onBack={noop} onNavigateToDay={noop} />)
     expect(screen.getByText(/1 day tracked/)).toBeInTheDocument()
@@ -40,8 +40,8 @@ describe('SummaryView', () => {
 
   it('shows correct percentages in category breakdown', () => {
     const today = formatDate(new Date())
-    setHours(today, 'dr-1on1', 3)
-    setHours(today, 'misc', 1)
+    setHours('work', today, 'dr-1on1', 3)
+    setHours('work', today, 'misc', 1)
 
     render(<SummaryView onBack={noop} onNavigateToDay={noop} />)
     expect(screen.getByText(/75%/)).toBeInTheDocument()
@@ -50,9 +50,9 @@ describe('SummaryView', () => {
 
   it('labels deleted categories as archived', () => {
     const today = formatDate(new Date())
-    const cats = getCategories()
-    setHours(today, cats[0].id, 2)
-    deleteCategory(cats[0].id)
+    const cats = getCategories('work')
+    setHours('work', today, cats[0].id, 2)
+    deleteCategory('work', cats[0].id)
 
     render(<SummaryView onBack={noop} onNavigateToDay={noop} />)
     expect(screen.getByText(`${cats[0].label} (archived)`)).toBeInTheDocument()
@@ -64,7 +64,7 @@ describe('SummaryView', () => {
     const lastWeekDay = new Date(today)
     lastWeekDay.setDate(lastWeekDay.getDate() - 7)
     const lastWeekStr = formatDate(lastWeekDay)
-    setHours(lastWeekStr, 'dr-1on1', 5)
+    setHours('work', lastWeekStr, 'dr-1on1', 5)
 
     const user = userEvent.setup()
     render(<SummaryView onBack={noop} onNavigateToDay={noop} />)
@@ -98,7 +98,7 @@ describe('SummaryView', () => {
 
   it('calls onNavigateToDay when a daily breakdown row is clicked', async () => {
     const today = formatDate(new Date())
-    setHours(today, 'dr-1on1', 1)
+    setHours('work', today, 'dr-1on1', 1)
 
     const onNav = vi.fn()
     const user = userEvent.setup()

@@ -2,23 +2,29 @@ import { authenticate } from '../lib/auth.js'
 import { queryItems, putItem, deleteItem } from '../lib/dynamo.js'
 import { ok, badRequest, unauthorized, serverError } from '../lib/response.js'
 
+function dayPrefix(tracker) {
+  return tracker && tracker !== 'work' ? `DAY#${tracker}#` : 'DAY#'
+}
+
 export async function handler(event) {
   try {
     const user = await authenticate(event)
     if (!user) return unauthorized()
 
     const method = event.requestContext.http.method
+    const tracker = event.queryStringParameters?.tracker
+    const prefix = dayPrefix(tracker)
 
     if (method === 'GET') {
       const { from, to } = event.queryStringParameters || {}
       if (!from || !to) return badRequest('Missing from/to query parameters')
       const items = await queryItems(
         `USER#${user.sub}`,
-        `DAY#${from}`,
-        `DAY#${to}`,
+        `${prefix}${from}`,
+        `${prefix}${to}`,
       )
       const days = items.map((item) => ({
-        date: item.SK.replace('DAY#', ''),
+        date: item.SK.replace(prefix, ''),
         log: item.log,
         updatedAt: item.updatedAt || null,
       }))
@@ -32,7 +38,7 @@ export async function handler(event) {
       const updatedAt = body.updatedAt || new Date().toISOString()
       await putItem({
         PK: `USER#${user.sub}`,
-        SK: `DAY#${date}`,
+        SK: `${prefix}${date}`,
         log: body.log,
         updatedAt,
       })
@@ -44,7 +50,7 @@ export async function handler(event) {
       if (!date) return badRequest('Missing date parameter')
       await deleteItem({
         PK: `USER#${user.sub}`,
-        SK: `DAY#${date}`,
+        SK: `${prefix}${date}`,
       })
       return ok({ date })
     }

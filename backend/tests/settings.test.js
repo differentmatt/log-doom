@@ -77,6 +77,25 @@ describe('settings handler', () => {
       const body = JSON.parse(res.body)
       expect(body.updatedAt).toBeNull()
     })
+
+    it('reads a namespaced SK when tracker is set', async () => {
+      authenticate.mockResolvedValue({ sub: '123', email: 'test@example.com' })
+      getItem.mockResolvedValue({
+        PK: 'USER#123',
+        SK: 'SETTINGS#exercise',
+        categories: [{ id: 'push-ups', label: 'Push-ups' }],
+        updatedAt: '2026-03-15T10:00:00.000Z',
+      })
+      const event = {
+        requestContext: { http: { method: 'GET' } },
+        headers: { authorization: 'Bearer token' },
+        queryStringParameters: { tracker: 'exercise' },
+      }
+      const res = await handler(event)
+      expect(getItem).toHaveBeenCalledWith({ PK: 'USER#123', SK: 'SETTINGS#exercise' })
+      const body = JSON.parse(res.body)
+      expect(body.categories).toEqual([{ id: 'push-ups', label: 'Push-ups' }])
+    })
   })
 
   describe('PUT', () => {
@@ -120,6 +139,27 @@ describe('settings handler', () => {
           SK: 'SETTINGS',
           categories,
           updatedAt: expect.any(String),
+        }),
+      )
+    })
+
+    it('writes to a namespaced SK when tracker is set', async () => {
+      authenticate.mockResolvedValue({ sub: '123', email: 'test@example.com' })
+      putItem.mockResolvedValue(undefined)
+      const categories = [{ id: 'push-ups', label: 'Push-ups' }]
+      const event = {
+        requestContext: { http: { method: 'PUT' } },
+        headers: { authorization: 'Bearer token' },
+        queryStringParameters: { tracker: 'exercise' },
+        body: JSON.stringify({ categories, updatedAt: '2026-03-15T12:00:00.000Z' }),
+      }
+      const res = await handler(event)
+      expect(res.statusCode).toBe(200)
+      expect(putItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          PK: 'USER#123',
+          SK: 'SETTINGS#exercise',
+          categories,
         }),
       )
     })

@@ -1,8 +1,13 @@
+export type SetMetric = 'reps' | 'seconds'
+
 export interface Category {
   id: string
   label: string
   description: string
   color: string
+  // Only meaningful for sets-based (non-hours) trackers; how to label/interpret
+  // each entry in a logged set-value array. Defaults to 'reps' when absent.
+  metric?: SetMetric
 }
 
 export interface StoredCategory extends Category {

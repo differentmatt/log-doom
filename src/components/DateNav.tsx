@@ -2,11 +2,11 @@ import { todayString } from '../storage'
 
 interface DateNavProps {
   date: string
-  totalHours: number
+  summaryText: string
   onPrev: () => void
   onNext: () => void
   onToday: () => void
-  onSummary: () => void
+  onSummary?: () => void
 }
 
 function formatDisplay(dateStr: string): string {
@@ -19,7 +19,7 @@ function formatDisplay(dateStr: string): string {
   })
 }
 
-export default function DateNav({ date, totalHours, onPrev, onNext, onToday, onSummary }: DateNavProps) {
+export default function DateNav({ date, summaryText, onPrev, onNext, onToday, onSummary }: DateNavProps) {
   const isToday = date === todayString()
 
   return (
@@ -54,12 +54,16 @@ export default function DateNav({ date, totalHours, onPrev, onNext, onToday, onS
           </button>
         </div>
       </div>
-      <button
-        onClick={onSummary}
-        className="flex items-center justify-center mx-auto text-xs text-blue-400 hover:text-blue-300 mt-1"
-      >
-        {totalHours > 0 ? `${totalHours}h logged` : 'no hours logged'}
-      </button>
+      {onSummary ? (
+        <button
+          onClick={onSummary}
+          className="flex items-center justify-center mx-auto text-xs text-blue-400 hover:text-blue-300 mt-1"
+        >
+          {summaryText}
+        </button>
+      ) : (
+        <div className="flex items-center justify-center text-xs text-zinc-500 mt-1">{summaryText}</div>
+      )}
     </div>
   )
 }

@@ -6,8 +6,16 @@ import AuthButton from './components/AuthButton'
 import { loadStoredUser, initGoogleAuth, signOut } from './auth'
 import type { AuthUser } from './auth'
 import { initSync, updateSyncUser, refreshSync } from './sync'
+import { getTrackers } from './storage'
 
 type View = { name: 'log'; date?: string } | { name: 'summary' } | { name: 'settings' }
+
+function initialTrackerId(): string {
+  const stored = sessionStorage.getItem('logdoom:tracker')
+  const active = getTrackers().filter((t) => !t.deleted)
+  if (stored && active.some((t) => t.id === stored)) return stored
+  return active[0]?.id ?? 'work'
+}
 
 export default function App() {
   const [view, setView] = useState<View>({ name: 'log' })
@@ -15,6 +23,10 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(() => loadStoredUser())
   const [gisReady, setGisReady] = useState(false)
   const [syncVersion, setSyncVersion] = useState(0)
+  const [trackerId, setTrackerId] = useState<string>(initialTrackerId)
+
+  const trackers = getTrackers().filter((t) => !t.deleted).sort((a, b) => a.sortOrder - b.sortOrder)
+  const activeTracker = trackers.find((t) => t.id === trackerId) ?? trackers[0]
 
   useEffect(() => {
     initSync(user, () => setSyncVersion((v) => v + 1))
@@ -37,6 +49,12 @@ export default function App() {
   function handleSignOut() {
     signOut(user)
     setUser(null)
+  }
+
+  function handleSelectTracker(id: string) {
+    setTrackerId(id)
+    sessionStorage.setItem('logdoom:tracker', id)
+    if (view.name === 'summary') setView({ name: 'log' })
   }
 
   return (
@@ -64,11 +82,29 @@ export default function App() {
             </button>
           )}
         </header>
+        {view.name !== 'settings' && trackers.length > 1 && (
+          <div className="flex gap-1 pb-2">
+            {trackers.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => handleSelectTracker(t.id)}
+                className={`flex-1 h-8 rounded text-xs font-medium transition-colors ${
+                  t.id === activeTracker.id
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                }`}
+              >
+                {t.icon ? `${t.icon} ` : ''}{t.label}
+              </button>
+            ))}
+          </div>
+        )}
         {view.name === 'log' ? (
           <LogView
-            key={`${view.date ?? 'today'}-${catVersion}-${syncVersion}`}
+            key={`${activeTracker.id}-${view.date ?? 'today'}-${catVersion}-${syncVersion}`}
+            tracker={activeTracker}
             initialDate={view.date}
-            onSummary={() => setView({ name: 'summary' })}
+            onSummary={activeTracker.id === 'work' ? () => setView({ name: 'summary' }) : undefined}
           />
         ) : view.name === 'summary' ? (
           <SummaryView
@@ -78,6 +114,7 @@ export default function App() {
           />
         ) : (
           <SettingsView
+            trackerId={activeTracker.id}
             onBack={() => {
               setCatVersion((v) => v + 1)
               setView({ name: 'log' })

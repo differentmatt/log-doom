@@ -9,7 +9,8 @@ vi.mock('./api', () => ({
 }))
 
 import { fetchDays, saveDayToApi, deleteDayFromApi, fetchSettings, saveSettingsToApi } from './api'
-import { initSync, updateSyncUser, syncDayLog, syncSettings } from './sync'
+import { initSync, updateSyncUser, syncDayLog, syncSettings, syncTrackers } from './sync'
+import { getTrackers } from './storage'
 import type { AuthUser } from './auth'
 
 const mockUser: AuthUser = {
@@ -29,28 +30,28 @@ beforeEach(() => {
 
 describe('syncDayLog', () => {
   it('is a no-op when not signed in', () => {
-    syncDayLog('2026-03-15', { 'dr-1on1': 2 }, '2026-03-15T12:00:00.000Z')
+    syncDayLog('work', '2026-03-15', { 'dr-1on1': 2 }, '2026-03-15T12:00:00.000Z')
     expect(saveDayToApi).not.toHaveBeenCalled()
   })
 
   it('calls saveDayToApi with updatedAt when signed in', () => {
     initSync(mockUser, () => {})
-    syncDayLog('2026-03-15', { 'dr-1on1': 2 }, '2026-03-15T12:00:00.000Z')
+    syncDayLog('work', '2026-03-15', { 'dr-1on1': 2 }, '2026-03-15T12:00:00.000Z')
     expect(saveDayToApi).toHaveBeenCalledWith(mockUser, '2026-03-15', {
       'dr-1on1': 2,
-    }, '2026-03-15T12:00:00.000Z')
+    }, '2026-03-15T12:00:00.000Z', 'work')
   })
 
   it('calls deleteDayFromApi when log is empty', async () => {
     initSync(mockUser, () => {})
-    syncDayLog('2026-03-15', {}, '2026-03-15T12:00:00.000Z')
-    expect(deleteDayFromApi).toHaveBeenCalledWith(mockUser, '2026-03-15')
+    syncDayLog('work', '2026-03-15', {}, '2026-03-15T12:00:00.000Z')
+    expect(deleteDayFromApi).toHaveBeenCalledWith(mockUser, '2026-03-15', 'work')
   })
 })
 
 describe('syncSettings', () => {
   it('is a no-op when not signed in', () => {
-    syncSettings([], '2026-03-15T12:00:00.000Z')
+    syncSettings('work', [], '2026-03-15T12:00:00.000Z')
     expect(saveSettingsToApi).not.toHaveBeenCalled()
   })
 
@@ -66,8 +67,24 @@ describe('syncSettings', () => {
         deleted: false,
       },
     ]
-    syncSettings(cats, '2026-03-15T12:00:00.000Z')
-    expect(saveSettingsToApi).toHaveBeenCalledWith(mockUser, cats, '2026-03-15T12:00:00.000Z')
+    syncSettings('work', cats, '2026-03-15T12:00:00.000Z')
+    expect(saveSettingsToApi).toHaveBeenCalledWith(mockUser, cats, '2026-03-15T12:00:00.000Z', 'work')
+  })
+})
+
+describe('syncTrackers', () => {
+  it('is a no-op when not signed in', () => {
+    syncTrackers([], '2026-03-15T12:00:00.000Z')
+    expect(saveSettingsToApi).not.toHaveBeenCalled()
+  })
+
+  it('pushes the registry through the settings API under a reserved tracker id', () => {
+    initSync(mockUser, () => {})
+    const trackers = [
+      { id: 'work', label: 'Work', unit: 'hours' as const, sortOrder: 0, deleted: false },
+    ]
+    syncTrackers(trackers, '2026-03-15T12:00:00.000Z')
+    expect(saveSettingsToApi).toHaveBeenCalledWith(mockUser, trackers, '2026-03-15T12:00:00.000Z', '__trackers__')
   })
 })
 
@@ -229,6 +246,7 @@ describe('merge logic', () => {
       '2026-03-15',
       { 'dr-1on1': 5 },
       '2026-03-15T14:00:00.000Z',
+      'work',
     )
   })
 
@@ -255,6 +273,7 @@ describe('merge logic', () => {
       dateStr,
       { 'dr-1on1': 2 },
       '2026-03-15T10:00:00.000Z',
+      'work',
     )
   })
 
@@ -268,10 +287,11 @@ describe('merge logic', () => {
     )
 
     vi.mocked(fetchDays).mockResolvedValue([])
-    vi.mocked(fetchSettings).mockResolvedValue({
-      categories: [{ id: 'cat1', label: 'Remote' }],
-      updatedAt: '2026-03-15T12:00:00.000Z',
-    })
+    vi.mocked(fetchSettings).mockImplementation(async (_user, trackerId) =>
+      trackerId === 'work'
+        ? { categories: [{ id: 'cat1', label: 'Remote' }], updatedAt: '2026-03-15T12:00:00.000Z' }
+        : { categories: null, updatedAt: null },
+    )
 
     const onChange = vi.fn()
     initSync(mockUser, onChange)
@@ -292,10 +312,11 @@ describe('merge logic', () => {
     )
 
     vi.mocked(fetchDays).mockResolvedValue([])
-    vi.mocked(fetchSettings).mockResolvedValue({
-      categories: [{ id: 'cat1', label: 'Remote' }],
-      updatedAt: '2026-03-15T12:00:00.000Z',
-    })
+    vi.mocked(fetchSettings).mockImplementation(async (_user, trackerId) =>
+      trackerId === 'work'
+        ? { categories: [{ id: 'cat1', label: 'Remote' }], updatedAt: '2026-03-15T12:00:00.000Z' }
+        : { categories: null, updatedAt: null },
+    )
     vi.mocked(saveSettingsToApi).mockResolvedValue(undefined)
 
     const onChange = vi.fn()
@@ -310,6 +331,93 @@ describe('merge logic', () => {
       mockUser,
       [{ id: 'cat1', label: 'Local' }],
       '2026-03-15T14:00:00.000Z',
+      'work',
+    )
+  })
+
+  it('merges the tracker registry: remote newer wins, and new remote trackers get pulled', async () => {
+    const remoteTrackers = [
+      { id: 'work', label: 'Work', unit: 'hours', sortOrder: 0, deleted: false },
+      { id: 'reading', label: 'Reading', unit: 'hours', sortOrder: 1, deleted: false },
+    ]
+    vi.mocked(fetchDays).mockResolvedValue([])
+    vi.mocked(fetchSettings).mockImplementation(async (_user, trackerId) =>
+      trackerId === '__trackers__'
+        ? { categories: remoteTrackers, updatedAt: '2026-03-15T12:00:00.000Z' }
+        : { categories: null, updatedAt: null },
+    )
+
+    const onChange = vi.fn()
+    initSync(mockUser, onChange)
+
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled())
+    const raw = JSON.parse(localStorage.getItem('logdoom:trackers')!)
+    expect(raw.trackers).toEqual(remoteTrackers)
+    // A tracker discovered from the merged registry should also get its own days/settings pulled
+    expect(fetchDays).toHaveBeenCalledWith(mockUser, expect.any(String), expect.any(String), 'reading')
+  })
+
+  it('merges the tracker registry: local newer pushes to API', async () => {
+    localStorage.setItem(
+      'logdoom:trackers',
+      JSON.stringify({
+        trackers: [{ id: 'work', label: 'Work', unit: 'hours', sortOrder: 0, deleted: false }],
+        updatedAt: '2026-03-15T14:00:00.000Z',
+      }),
+    )
+    vi.mocked(fetchDays).mockResolvedValue([])
+    vi.mocked(fetchSettings).mockImplementation(async (_user, trackerId) =>
+      trackerId === '__trackers__'
+        ? {
+            categories: [{ id: 'work', label: 'Renamed remotely', unit: 'hours', sortOrder: 0, deleted: false }],
+            updatedAt: '2026-03-15T12:00:00.000Z',
+          }
+        : { categories: null, updatedAt: null },
+    )
+    vi.mocked(saveSettingsToApi).mockResolvedValue(undefined)
+
+    const onChange = vi.fn()
+    initSync(mockUser, onChange)
+
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled())
+    const raw = JSON.parse(localStorage.getItem('logdoom:trackers')!)
+    expect(raw.trackers[0].label).toBe('Work')
+    expect(saveSettingsToApi).toHaveBeenCalledWith(
+      mockUser,
+      [{ id: 'work', label: 'Work', unit: 'hours', sortOrder: 0, deleted: false }],
+      '2026-03-15T14:00:00.000Z',
+      '__trackers__',
+    )
+  })
+
+  it('a fresh device with only seeded (never-edited) trackers accepts old-but-real remote data instead of racing it', async () => {
+    // Simulates App.tsx's initial render seeding the registry (via getTrackers())
+    // before the async pullRemote() below resolves — same order as production.
+    getTrackers()
+    const remoteTrackers = [
+      { id: 'work', label: 'Work', unit: 'hours', sortOrder: 0, deleted: false },
+      { id: 'reading', label: 'Reading', unit: 'hours', sortOrder: 1, deleted: false },
+    ]
+    vi.mocked(fetchDays).mockResolvedValue([])
+    vi.mocked(fetchSettings).mockImplementation(async (_user, trackerId) =>
+      trackerId === '__trackers__'
+        ? { categories: remoteTrackers, updatedAt: '2020-01-01T00:00:00.000Z' }
+        : { categories: null, updatedAt: null },
+    )
+    vi.mocked(saveSettingsToApi).mockResolvedValue(undefined)
+
+    const onChange = vi.fn()
+    initSync(mockUser, onChange)
+
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled())
+    const raw = JSON.parse(localStorage.getItem('logdoom:trackers')!)
+    expect(raw.trackers).toEqual(remoteTrackers)
+    // Must not have pushed the seeded defaults up and clobbered the real remote data
+    expect(saveSettingsToApi).not.toHaveBeenCalledWith(
+      mockUser,
+      expect.anything(),
+      expect.anything(),
+      '__trackers__',
     )
   })
 })

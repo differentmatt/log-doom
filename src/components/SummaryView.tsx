@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { getCategories, getRecentWeeks, getWeekEnd, getDaysInRange, formatDate } from '../storage'
+import type { DayLog } from '../trackers'
 
 interface SummaryViewProps {
   onBack: () => void
@@ -25,17 +26,17 @@ function formatDayDisplay(dateStr: string): string {
 export default function SummaryView({ onBack, onNavigateToDay }: SummaryViewProps) {
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(0)
 
-  const allCats = getCategories()
+  const allCats = getCategories('work')
   const catMap = new Map(allCats.map((c) => [c.id, c]))
   const weeks = getRecentWeeks(4)
 
   // Compute totals per week for pill labels
   const weekTotals = weeks.map((weekStart) => {
     const end = getWeekEnd(weekStart)
-    const days = getDaysInRange(weekStart, end)
+    const days = getDaysInRange('work', weekStart, end)
     let total = 0
     for (const { log } of days) {
-      for (const hours of Object.values(log)) total += hours
+      for (const hours of Object.values(log)) total += hours as number
     }
     return total
   })
@@ -43,7 +44,7 @@ export default function SummaryView({ onBack, onNavigateToDay }: SummaryViewProp
   // Selected week data
   const selectedWeekStart = weeks[selectedWeekIndex]
   const selectedWeekEnd = getWeekEnd(selectedWeekStart)
-  const selectedDays = getDaysInRange(selectedWeekStart, selectedWeekEnd)
+  const selectedDays = getDaysInRange('work', selectedWeekStart, selectedWeekEnd)
   const selectedTotal = weekTotals[selectedWeekIndex]
 
   // Stats
@@ -56,7 +57,7 @@ export default function SummaryView({ onBack, onNavigateToDay }: SummaryViewProp
   const totals: Record<string, number> = {}
   for (const { log } of selectedDays) {
     for (const [catId, hours] of Object.entries(log)) {
-      totals[catId] = (totals[catId] ?? 0) + hours
+      totals[catId] = (totals[catId] ?? 0) + (hours as number)
     }
   }
   const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1])
@@ -64,7 +65,7 @@ export default function SummaryView({ onBack, onNavigateToDay }: SummaryViewProp
 
   // Build full Mon-Sun day list for selected week
   const today = formatDate(new Date())
-  const allWeekDays: { date: string; log: Record<string, number> }[] = []
+  const allWeekDays: { date: string; log: DayLog }[] = []
   const [sy, sm, sd] = selectedWeekStart.split('-').map(Number)
   for (let i = 0; i < 7; i++) {
     const d = new Date(sy, sm - 1, sd)
@@ -163,11 +164,11 @@ export default function SummaryView({ onBack, onNavigateToDay }: SummaryViewProp
         </h3>
         <div className="space-y-1">
           {allWeekDays.map(({ date, log }) => {
-            const dayTotal = Object.values(log).reduce((s, v) => s + v, 0)
+            const dayTotal = (Object.values(log) as number[]).reduce((s, v) => s + v, 0)
             const hasData = Object.keys(log).length > 0
             const top3 = hasData
               ? Object.entries(log)
-                  .sort((a, b) => b[1] - a[1])
+                  .sort((a, b) => (b[1] as number) - (a[1] as number))
                   .slice(0, 3)
                   .map(([catId]) => catMap.get(catId)?.label ?? 'Unknown')
               : []

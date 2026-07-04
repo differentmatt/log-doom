@@ -87,6 +87,35 @@ describe('days handler', () => {
       const res = await handler(event)
       expect(res.statusCode).toBe(400)
     })
+
+    it('queries a namespaced SK range when tracker is set', async () => {
+      authenticate.mockResolvedValue({ sub: '123', email: 'test@example.com' })
+      queryItems.mockResolvedValue([
+        { PK: 'USER#123', SK: 'DAY#exercise#2026-03-01', log: { 'push-ups': { sets: 3, reps: 10 } }, updatedAt: '2026-03-01T10:00:00.000Z' },
+      ])
+      const event = {
+        requestContext: { http: { method: 'GET' } },
+        headers: { authorization: 'Bearer token' },
+        queryStringParameters: { from: '2026-03-01', to: '2026-03-31', tracker: 'exercise' },
+      }
+      const res = await handler(event)
+      expect(queryItems).toHaveBeenCalledWith('USER#123', 'DAY#exercise#2026-03-01', 'DAY#exercise#2026-03-31')
+      const body = JSON.parse(res.body)
+      expect(body[0].date).toBe('2026-03-01')
+      expect(body[0].log).toEqual({ 'push-ups': { sets: 3, reps: 10 } })
+    })
+
+    it('treats tracker=work the same as no tracker', async () => {
+      authenticate.mockResolvedValue({ sub: '123', email: 'test@example.com' })
+      queryItems.mockResolvedValue([])
+      const event = {
+        requestContext: { http: { method: 'GET' } },
+        headers: { authorization: 'Bearer token' },
+        queryStringParameters: { from: '2026-03-01', to: '2026-03-31', tracker: 'work' },
+      }
+      await handler(event)
+      expect(queryItems).toHaveBeenCalledWith('USER#123', 'DAY#2026-03-01', 'DAY#2026-03-31')
+    })
   })
 
   describe('PUT', () => {
@@ -147,6 +176,27 @@ describe('days handler', () => {
       const res = await handler(event)
       expect(res.statusCode).toBe(400)
     })
+
+    it('writes to a namespaced SK when tracker is set', async () => {
+      authenticate.mockResolvedValue({ sub: '123', email: 'test@example.com' })
+      putItem.mockResolvedValue(undefined)
+      const event = {
+        requestContext: { http: { method: 'PUT' } },
+        headers: { authorization: 'Bearer token' },
+        pathParameters: { date: '2026-03-15' },
+        queryStringParameters: { tracker: 'exercise' },
+        body: JSON.stringify({ log: { 'push-ups': { sets: 3, reps: 10 } }, updatedAt: '2026-03-15T12:00:00.000Z' }),
+      }
+      const res = await handler(event)
+      expect(res.statusCode).toBe(200)
+      expect(putItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          PK: 'USER#123',
+          SK: 'DAY#exercise#2026-03-15',
+          log: { 'push-ups': { sets: 3, reps: 10 } },
+        }),
+      )
+    })
   })
 
   describe('DELETE', () => {
@@ -175,6 +225,23 @@ describe('days handler', () => {
       }
       const res = await handler(event)
       expect(res.statusCode).toBe(400)
+    })
+
+    it('deletes a namespaced SK when tracker is set', async () => {
+      authenticate.mockResolvedValue({ sub: '123', email: 'test@example.com' })
+      deleteItem.mockResolvedValue(undefined)
+      const event = {
+        requestContext: { http: { method: 'DELETE' } },
+        headers: { authorization: 'Bearer token' },
+        pathParameters: { date: '2026-03-15' },
+        queryStringParameters: { tracker: 'exercise' },
+      }
+      const res = await handler(event)
+      expect(res.statusCode).toBe(200)
+      expect(deleteItem).toHaveBeenCalledWith({
+        PK: 'USER#123',
+        SK: 'DAY#exercise#2026-03-15',
+      })
     })
   })
 })
